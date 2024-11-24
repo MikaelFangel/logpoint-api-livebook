@@ -6,7 +6,7 @@
 Mix.install(
   [
     {:kino, "~> 0.14.2"},
-    {:logpoint_api, github: "MikaelFangel/logpoint_api", tag: "v0.2.3"}
+    {:logpoint_api, github: "MikaelFangel/logpoint_api", branch: "v1"}
   ],
   consolidate_protocols: false
 )
@@ -33,12 +33,8 @@ secret_key = Kino.Input.read(secret_key_input)
 ```
 
 ```elixir
-alias LogpointApi.SearchApi, as: SearchApi
-
-credential = %LogpointApi.Credential{
-  username: username,
-  secret_key: System.fetch_env!(secret_key)
-}
+client = LogpointApi.Client.new(ip, username, System.fetch_env!(secret_key))
+{:ok, pid} = LogpointClient.start_link(client)
 
 IO.puts("Access variables set.")
 ```
@@ -56,7 +52,8 @@ This gives access to information about a Logpoint instance and all the data avai
 This will retrieve the timezone and time format.
 
 ```elixir
-{_, result} = SearchApi.get_user_timezone(ip, credential)
+{_, result} = LogpointClient.allowed_data(pid, :user_preference)
+
 Kino.DataTable.new([result])
 ```
 
@@ -65,7 +62,10 @@ Kino.DataTable.new([result])
 This retrieves the names and IP addresses of all the Logpoints configured in a distributed setup.
 
 ```elixir
-SearchApi.get_logpoints(ip, credential)
+{_, result} = LogpointClient.allowed_data(pid, :loginspects)
+result
+|> Map.get("allowed_loginspects")
+|> Kino.DataTable.new()
 ```
 
 ### Getting Repos
@@ -73,7 +73,7 @@ SearchApi.get_logpoints(ip, credential)
 This retrieves the name and IP addresses of all the repos configured in a Logpoint instance.
 
 ```elixir
-{_, result} = SearchApi.get_repos(ip, credential)
+{_, result} = LogpointClient.allowed_data(pid, :logpoint_repos)
 
 result
 |> Map.get("allowed_repos")
@@ -85,7 +85,7 @@ result
 This retrieves all the names and IP addresses of all the devices configured in a Logpoint instance.
 
 ```elixir
-{_, result} = SearchApi.get_devices(ip, credential)
+{_, result} = LogpointClient.allowed_data(pid, :devices)
 
 Map.get(result, "allowed_devices")
 |> hd
@@ -98,7 +98,7 @@ Map.get(result, "allowed_devices")
 This retrieves the information related to the live searches performed for dashboards and alerts.
 
 ```elixir
-{_, result} = SearchApi.get_livesearches(ip, credential)
+{_, result} = LogpointClient.allowed_data(pid, :livesearches)
 
 Map.get(result, "livesearches")
 |> Kino.Tree.new()
@@ -117,24 +117,26 @@ query = Kino.Input.text("Logpoint Query")
 ```
 
 ```elixir
-request_data = %SearchApi.Query{
-  query: Kino.Input.read(query),
-  time_range: "Last 24 hours",
-  limit: 100_000,
-  repos: ["127.0.0.1:5504/Network"]
-}
+request_data = LogpointApi.Query.new(
+  Kino.Input.read(query),
+  "Last 24 hours",
+  100_000,
+  ["127.0.0.1:5504/Network"]
+)
 
-{:ok, result} = SearchApi.get_search_id(ip, credential, request_data)
-search_id = result |> Map.get("search_id")
-
+{:ok, search_id} = LogpointClient.submit_search(pid, request_data)
 ```
 
-### Getting Search Logs
+### Get the status of a submitted search
 
 ```elixir
-{_, result} = SearchApi.get_search_result(ip, credential, search_id)
-Map.get(result, "final") |> IO.puts()
-Map.get(result, "rows")
+LogpointClient.search_status(pid, search_id)
+```
+
+### Getting search results
+
+```elixir
+{_, result} = LogpointClient.search_result(pid, search_id)
 ```
 
 ```elixir
@@ -293,4 +295,4 @@ ids = %IncidentApi.IncidentIDs{
 IncidentApi.reopen_incidents(ip, credential, ids)
 ```
 
-<!-- livebook:{"offset":6234,"stamp":{"token":"XCP.1l_CA4yRAbdTOTG_mnkbOzyDTbkvtySvcO85xvZAPazgVB78scnEOWOEOG_hwvAdvLxUyJEZGd-pWcVqP3uvivz3V_DZd674PB0k1QzMyfLUv86EeqwB","version":2}} -->
+<!-- livebook:{"offset":6283,"stamp":{"token":"XCP.1aOQM0hoGs8YdqGWrQ324QXZOhU6Qs8wdyoPIXRKCTi3l8IrAizCBScdIu_j-6ADy307yXMoZuxQ7s3qJJIDT47bpP-yPfbHN1dDqoHlIl_fUMsWb4I6","version":2}} -->
