@@ -33,8 +33,7 @@ secret_key = Kino.Input.read(secret_key_input)
 ```
 
 ```elixir
-client = LogpointApi.Client.new(ip, username, System.fetch_env!(secret_key))
-{:ok, pid} = LogpointClient.start_link(client)
+{:ok, pid} = LogpointClient.new(ip, username, System.fetch_env!(secret_key))
 
 IO.puts("Access variables set.")
 ```
@@ -131,6 +130,10 @@ request_data = LogpointApi.Query.new(
 
 ```elixir
 LogpointClient.search_status(pid, search_id)
+```
+
+```elixir
+LogpointClient.searches(pid, :complete)
 ```
 
 ### Getting search results
@@ -295,4 +298,4 @@ ids = %IncidentApi.IncidentIDs{
 IncidentApi.reopen_incidents(ip, credential, ids)
 ```
 
-<!-- livebook:{"offset":6283,"stamp":{"token":"XCP.1aOQM0hoGs8YdqGWrQ324QXZOhU6Qs8wdyoPIXRKCTi3l8IrAizCBScdIu_j-6ADy307yXMoZuxQ7s3qJJIDT47bpP-yPfbHN1dDqoHlIl_fUMsWb4I6","version":2}} -->
+<!-- livebook:{"offset":6291,"stamp":{"token":"XCP.QxW1rdQ3Mtj0W5QsdsjV4Dg3cRcwW76I0IMQKfTyZBLVGA7JP3rE9ylxHGaER_TpxwiTDFZ6oG3kCISu8yMHfuNCZzScRBBWiJI7V_n0q-DbVlPTXDRj","version":2}} -->
