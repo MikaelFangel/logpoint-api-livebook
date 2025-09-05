@@ -6,7 +6,7 @@
 Mix.install(
   [
     {:kino, "~> 0.14.2"},
-    {:logpoint_api, github: "MikaelFangel/logpoint_api", tag: "v0.2.3"}
+    {:logpoint_api, "~> 1.0"}
   ],
   consolidate_protocols: false
 )
@@ -33,14 +33,14 @@ secret_key = Kino.Input.read(secret_key_input)
 ```
 
 ```elixir
-alias LogpointApi.SearchApi, as: SearchApi
-
-credential = %LogpointApi.Credential{
+credentials = %{
+  ip: ip,
   username: username,
-  secret_key: System.fetch_env!(secret_key)
+  secret_key: System.fetch_env!(secret_key),
+  verify_ssl: false
 }
 
-IO.puts("Access variables set.")
+"Credentials set"
 ```
 
 <!-- livebook:{"branch_parent_index":0} -->
@@ -56,7 +56,8 @@ This gives access to information about a Logpoint instance and all the data avai
 This will retrieve the timezone and time format.
 
 ```elixir
-{_, result} = SearchApi.get_user_timezone(ip, credential)
+{_, result}= LogpointApi.user_preference(credentials)
+
 Kino.DataTable.new([result])
 ```
 
@@ -65,7 +66,10 @@ Kino.DataTable.new([result])
 This retrieves the names and IP addresses of all the Logpoints configured in a distributed setup.
 
 ```elixir
-SearchApi.get_logpoints(ip, credential)
+{_, result} = LogpointApi.loginspects(credentials)
+result
+|> Map.get("allowed_loginspects")
+|> Kino.DataTable.new()
 ```
 
 ### Getting Repos
@@ -73,7 +77,7 @@ SearchApi.get_logpoints(ip, credential)
 This retrieves the name and IP addresses of all the repos configured in a Logpoint instance.
 
 ```elixir
-{_, result} = SearchApi.get_repos(ip, credential)
+{_, result} = LogpointApi.logpoint_repos(credentials)
 
 result
 |> Map.get("allowed_repos")
@@ -85,7 +89,7 @@ result
 This retrieves all the names and IP addresses of all the devices configured in a Logpoint instance.
 
 ```elixir
-{_, result} = SearchApi.get_devices(ip, credential)
+{_, result} = LogpointApi.devices(credentials)
 
 Map.get(result, "allowed_devices")
 |> hd
@@ -98,7 +102,7 @@ Map.get(result, "allowed_devices")
 This retrieves the information related to the live searches performed for dashboards and alerts.
 
 ```elixir
-{_, result} = SearchApi.get_livesearches(ip, credential)
+{_, result} = LogpointApi.livesearches(credentials)
 
 Map.get(result, "livesearches")
 |> Kino.Tree.new()
@@ -117,24 +121,20 @@ query = Kino.Input.text("Logpoint Query")
 ```
 
 ```elixir
-request_data = %SearchApi.Query{
-  query: Kino.Input.read(query),
-  time_range: "Last 24 hours",
-  limit: 100_000,
-  repos: ["127.0.0.1:5504/Network"]
-}
+request_data = LogpointApi.Query.new(
+  Kino.Input.read(query),
+  "Last 24 hours",
+  100_000,
+  ["127.0.0.1:5504"]
+)
 
-{:ok, result} = SearchApi.get_search_id(ip, credential, request_data)
-search_id = result |> Map.get("search_id")
-
+{:ok, search_result} = LogpointApi.get_search_id(credentials, request_data)
 ```
 
-### Getting Search Logs
+### Getting search results
 
 ```elixir
-{_, result} = SearchApi.get_search_result(ip, credential, search_id)
-Map.get(result, "final") |> IO.puts()
-Map.get(result, "rows")
+{_, result} = LogpointApi.get_search_result(credentials, Map.get(search_result, "search_id"))
 ```
 
 ```elixir
@@ -163,21 +163,12 @@ Kino.DataTable.new(normalized_maps)
 
 ## Incident API
 
-```elixir
-alias LogpointApi.IncidentApi, as: IncidentApi
-```
-
 <!-- livebook:{"branch_parent_index":3} -->
 
 ## Getting the incidents within a specific time period
 
 ```elixir
-time_range = %IncidentApi.TimeRange{
-  ts_from: 1_714_163_220,
-  ts_to: :os.system_time(:millisecond)
-}
-
-IncidentApi.get_incidents(ip, credential, time_range)
+LogpointApi.incidents(credentials, 1_714_100_000, :os.system_time(:millisecond))
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -185,12 +176,7 @@ IncidentApi.get_incidents(ip, credential, time_range)
 ## Getting the incident states
 
 ```elixir
-time_range = %IncidentApi.TimeRange{
-  ts_from: 1_714_100_000,
-  ts_to: :os.system_time(:millisecond)
-}
-
-IncidentApi.get_incident_states(ip, credential, time_range)
+LogpointApi.incident_states(credentials, 1_714_100_000, :os.system_time(:millisecond))
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -198,12 +184,7 @@ IncidentApi.get_incident_states(ip, credential, time_range)
 ## Getting the data for a single incident
 
 ```elixir
-request_data = %IncidentApi.Incident{
-  incident_obj_id: "6628bcba248b50d05d38d23e",
-  incident_id: "84d77f5ea2801f9d9af6dc7ec77f6d3b"
-}
-
-{_, result} = IncidentApi.get_data_from_incident(ip, credential, request_data)
+{_, result} = LogpointApi.incident(credentials, "662bb728bd33deb28f5ac33a", "3e5a3334517d8a31b493833288fe14f6")
 
 Map.get(result, "rows")
 |> Kino.DataTable.new()
@@ -214,19 +195,7 @@ Map.get(result, "rows")
 ## Adding incident comments
 
 ```elixir
-request_data =
-  %IncidentApi.IncidentCommentData{
-    states: [
-      %IncidentApi.IncidentComment{
-        _id: "662ba226248b50d05d38d278",
-        comments: [
-          "Test String"
-        ]
-      }
-    ]
-  }
-
-IncidentApi.add_comments(ip, credential, request_data)
+LogpointApi.add_comments(credentials, %{"6628bcba248b50d05d38d23e" => ["Comment"]})
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -234,7 +203,7 @@ IncidentApi.add_comments(ip, credential, request_data)
 ## Getting Incident Users and User Groups
 
 ```elixir
-IncidentApi.get_users(ip, credential)
+LogpointApi.users(credentials)
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -242,13 +211,7 @@ IncidentApi.get_users(ip, credential)
 ## Assign Incident
 
 ```elixir
-ids = %IncidentApi.IncidentIDs{
-  incident_ids: [
-    "6628bcba248b50d05d38d23e"
-  ]
-}
-
-IncidentApi.assign_incidents(ip, credential, ids, "6576dedc81777a77c57723e5")
+LogpointApi.assign_incidents(credentials, ["6628bcba248b50d05d38d23e"], "6576dedc81777a77c57723e5")
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -256,13 +219,7 @@ IncidentApi.assign_incidents(ip, credential, ids, "6576dedc81777a77c57723e5")
 ## Resolve Incidents
 
 ```elixir
-ids = %IncidentApi.IncidentIDs{
-  incident_ids: [
-    "662ba226248b50d05d38d278"
-  ]
-}
-
-IncidentApi.resolve_incidents(ip, credential, ids)
+LogpointApi.resolve_incidents(credentials, ["662ba226248b50d05d38d278"])
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -270,13 +227,7 @@ IncidentApi.resolve_incidents(ip, credential, ids)
 ## Close Incidents
 
 ```elixir
-ids = %IncidentApi.IncidentIDs{
-  incident_ids: [
-    "662ba226248b50d05d38d278"
-  ]
-}
-
-IncidentApi.close_incidents(ip, credential, ids)
+LogpointApi.close_incidents(credentials, ["662ba226248b50d05d38d278"])
 ```
 
 <!-- livebook:{"branch_parent_index":3} -->
@@ -284,13 +235,7 @@ IncidentApi.close_incidents(ip, credential, ids)
 ## Reopen Incidents
 
 ```elixir
-ids = %IncidentApi.IncidentIDs{
-  incident_ids: [
-    "662ba226248b50d05d38d278"
-  ]
-}
-
-IncidentApi.reopen_incidents(ip, credential, ids)
+LogpointApi.reopen_incidents(credentials, ["662ba226248b50d05d38d278"])
 ```
 
-<!-- livebook:{"offset":6234,"stamp":{"token":"XCP.1l_CA4yRAbdTOTG_mnkbOzyDTbkvtySvcO85xvZAPazgVB78scnEOWOEOG_hwvAdvLxUyJEZGd-pWcVqP3uvivz3V_DZd674PB0k1QzMyfLUv86EeqwB","version":2}} -->
+<!-- livebook:{"offset":5322,"stamp":{"token":"XCP.PO6pixasBr_02htIB6lWuCJRQo88kvBRvvX0q0787wEXZjirUyANjO8hzgDMKXCuTfSDMWf5vB70OTN31PtpU3xLJnBBZbIcHlw7KD1SttjDxHqsuysy","version":2}} -->
